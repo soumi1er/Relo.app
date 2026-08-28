@@ -1,0 +1,268 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Ecole {
+  id                String   @id @default(uuid())
+  nom               String
+  typeEtablissement String   @default("LYCEE_GENERAL")
+  adresse           String?
+  telephone         String?
+  directeurNom      String?
+  directeurPrenom   String?
+  createdAt         DateTime @default(now())
+
+  utilisateurs       Utilisateur[]
+  anneesScolaires    AnneeScolaire[]
+  classes            Classe[]
+  matieres           Matiere[]
+  eleves             Eleve[]
+  publications       Publication[]
+  dossiersScolarite  DossierScolarite[]
+  paiementsScolarite PaiementScolarite[]
+}
+
+model Utilisateur {
+  id         String   @id @default(uuid())
+  email      String   @unique
+  motDePasse String
+  nom        String
+  prenom     String
+  role       String
+  actif      Boolean  @default(true)
+  createdAt  DateTime @default(now())
+
+  ecoleId              String
+  ecole                Ecole               @relation(fields: [ecoleId], references: [id])
+  affectations         AffectationProf[]
+  enfants              LienParentEleve[]
+  eleveLie             Eleve?              @relation("CompteEleve")
+  notesModifiees       Note[]              @relation("SaisiPar")
+  publications         Publication[]
+  historiqueNotes      NoteHistorique[]
+  paiementsEnregistres PaiementScolarite[] @relation("PaiementEnregistrePar")
+
+  @@index([ecoleId])
+}
+
+model AnneeScolaire {
+  id                 String               @id @default(uuid())
+  libelle            String
+  active             Boolean              @default(true)
+  ecoleId            String
+  ecole              Ecole                @relation(fields: [ecoleId], references: [id])
+  classes            Classe[]
+  historiques        HistoriqueScolaire[]
+  dossiersScolarite  DossierScolarite[]
+  paiementsScolarite PaiementScolarite[]
+
+  @@unique([ecoleId, libelle])
+}
+
+model Classe {
+  id              String            @id @default(uuid())
+  nom             String
+  cycle           String
+  typeParcours    String?
+  niveauCode      String?
+  filiereCode     String?
+  ecoleId         String
+  ecole           Ecole             @relation(fields: [ecoleId], references: [id])
+  anneeScolaireId String
+  anneeScolaire   AnneeScolaire     @relation(fields: [anneeScolaireId], references: [id])
+  eleves          Eleve[]
+  matieresClasse  ClasseMatiere[]
+  affectations    AffectationProf[]
+  publications    Publication[]
+
+  @@unique([ecoleId, anneeScolaireId, nom])
+}
+
+model Matiere {
+  id             String          @id @default(uuid())
+  nom            String
+  ecoleId        String
+  ecole          Ecole           @relation(fields: [ecoleId], references: [id])
+  classesMatiere ClasseMatiere[]
+
+  @@unique([ecoleId, nom])
+}
+
+model ClasseMatiere {
+  id           String            @id @default(uuid())
+  coefficient  Float
+  classeId     String
+  classe       Classe            @relation(fields: [classeId], references: [id])
+  matiereId    String
+  matiere      Matiere           @relation(fields: [matiereId], references: [id])
+  affectations AffectationProf[]
+  notes        Note[]
+
+  @@unique([classeId, matiereId])
+}
+
+model AffectationProf {
+  id              String        @id @default(uuid())
+  professeurId    String
+  professeur      Utilisateur   @relation(fields: [professeurId], references: [id])
+  classeId        String
+  classe          Classe        @relation(fields: [classeId], references: [id])
+  classeMatiereId String
+  classeMatiere   ClasseMatiere @relation(fields: [classeMatiereId], references: [id])
+
+  @@unique([professeurId, classeMatiereId])
+  @@index([classeId])
+}
+
+model Eleve {
+  id                  String               @id @default(uuid())
+  matricule           String?              @unique
+  nom                 String
+  prenom              String
+  dateNaissance       DateTime
+  sexe                String
+  dateInscription     DateTime             @default(now())
+  statut              String               @default("ACTIF")
+  photoUrl            String?
+  numeroCarte         String?              @unique
+  carteDelivree       Boolean              @default(false)
+  dateCarte           DateTime?
+  ecoleId             String
+  ecole               Ecole                @relation(fields: [ecoleId], references: [id])
+  classeId            String?
+  classe              Classe?              @relation(fields: [classeId], references: [id])
+  compteUtilisateurId String?              @unique
+  compteUtilisateur   Utilisateur?         @relation("CompteEleve", fields: [compteUtilisateurId], references: [id])
+  parents             LienParentEleve[]
+  notes               Note[]
+  historiques         HistoriqueScolaire[]
+  dossiersScolarite   DossierScolarite[]
+  paiementsScolarite  PaiementScolarite[]
+
+  @@index([ecoleId])
+  @@index([classeId])
+}
+
+model DossierScolarite {
+  id              String              @id @default(uuid())
+  eleveId         String
+  eleve           Eleve               @relation(fields: [eleveId], references: [id])
+  anneeScolaireId String
+  anneeScolaire   AnneeScolaire       @relation(fields: [anneeScolaireId], references: [id])
+  ecoleId         String
+  ecole           Ecole               @relation(fields: [ecoleId], references: [id])
+  montantTotal    Float               @default(0)
+  remise          Float               @default(0)
+  commentaire     String?
+  paiements       PaiementScolarite[]
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+
+  @@unique([eleveId, anneeScolaireId])
+  @@index([ecoleId, anneeScolaireId])
+}
+
+model PaiementScolarite {
+  id              String           @id @default(uuid())
+  eleveId         String
+  eleve           Eleve            @relation(fields: [eleveId], references: [id])
+  dossierId       String
+  dossier         DossierScolarite @relation(fields: [dossierId], references: [id])
+  anneeScolaireId String
+  anneeScolaire   AnneeScolaire    @relation(fields: [anneeScolaireId], references: [id])
+  ecoleId         String
+  ecole           Ecole            @relation(fields: [ecoleId], references: [id])
+  montant         Float
+  mode            String           @default("ESPECES")
+  reference       String?
+  commentaire     String?
+  datePaiement    DateTime         @default(now())
+  enregistreParId String
+  enregistrePar   Utilisateur      @relation("PaiementEnregistrePar", fields: [enregistreParId], references: [id])
+  createdAt       DateTime         @default(now())
+
+  @@index([ecoleId, anneeScolaireId])
+  @@index([eleveId, anneeScolaireId])
+}
+
+model LienParentEleve {
+  id       String      @id @default(uuid())
+  parentId String
+  parent   Utilisateur @relation(fields: [parentId], references: [id])
+  eleveId  String
+  eleve    Eleve       @relation(fields: [eleveId], references: [id])
+
+  @@unique([parentId, eleveId])
+}
+
+model Note {
+  id              String           @id @default(uuid())
+  valeur          Float
+  bareme          Float            @default(20)
+  type            String
+  trimestre       String
+  date            DateTime         @default(now())
+  publiee         Boolean          @default(false)
+  eleveId         String
+  eleve           Eleve            @relation(fields: [eleveId], references: [id])
+  classeMatiereId String
+  classeMatiere   ClasseMatiere    @relation(fields: [classeMatiereId], references: [id])
+  saisieParId     String
+  saisiePar       Utilisateur      @relation("SaisiPar", fields: [saisieParId], references: [id])
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  historique      NoteHistorique[]
+
+  @@index([eleveId, trimestre])
+  @@index([classeMatiereId])
+  @@index([trimestre, publiee])
+}
+
+model NoteHistorique {
+  id             String      @id @default(uuid())
+  noteId         String
+  note           Note        @relation(fields: [noteId], references: [id], onDelete: Cascade)
+  utilisateurId  String
+  utilisateur    Utilisateur @relation(fields: [utilisateurId], references: [id])
+  ancienneValeur Float?
+  nouvelleValeur Float?
+  action         String
+  date           DateTime    @default(now())
+
+  @@index([noteId])
+}
+
+model Publication {
+  id          String      @id @default(uuid())
+  trimestre   String
+  publiee     Boolean     @default(false)
+  publishedAt DateTime?
+  classeId    String
+  classe      Classe      @relation(fields: [classeId], references: [id])
+  ecoleId     String
+  ecole       Ecole       @relation(fields: [ecoleId], references: [id])
+  publieParId String
+  publiePar   Utilisateur @relation(fields: [publieParId], references: [id])
+
+  @@unique([classeId, trimestre])
+  @@index([ecoleId, trimestre])
+}
+
+model HistoriqueScolaire {
+  id              String        @id @default(uuid())
+  eleveId         String
+  eleve           Eleve         @relation(fields: [eleveId], references: [id])
+  anneeScolaireId String
+  anneeScolaire   AnneeScolaire @relation(fields: [anneeScolaireId], references: [id])
+  classeNom       String
+  moyenneAnnuelle Float
+  decision        String
+  dateDecision    DateTime      @default(now())
+
+  @@unique([eleveId, anneeScolaireId])
+}
