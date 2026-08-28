@@ -1,0 +1,72 @@
+name: relo-local
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: relo
+      POSTGRES_USER: relo
+      POSTGRES_PASSWORD: relo_local_password
+    ports:
+      - "5433:5432"
+    volumes:
+      - relo_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U relo -d relo"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      NODE_ENV: development
+      PORT: 4000
+      DATABASE_URL: postgresql://relo:relo_local_password@postgres:5432/relo
+      POSTGRES_USER: relo
+      POSTGRES_DB: relo
+      JWT_SECRET: relo_local_jwt_secret_change_me
+      CORS_ORIGIN: http://localhost:8080
+      PDF_MAX_BODY: 50mb
+      PDF_IMPORT_USE_IA: "false"
+      OPENAI_API_BASE: https://api.openai.com/v1
+      OPENAI_MODEL: gpt-5-mini
+      # Ne pas mettre la clé dans ce fichier. Pour un test IA ponctuel :
+      # OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+    ports:
+      - "4000:4000"
+    volumes:
+      - relo_backend_data:/app/data
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:4000/api/sante').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))\""]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
+  frontend:
+    build:
+      context: ./desktop
+      dockerfile: Dockerfile.web
+      args:
+        VITE_API_URL: http://localhost:4000/api
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "8080:80"
+
+volumes:
+  relo_postgres_data:
+    name: relo_local_postgres_data
+  relo_backend_data:
+    name: relo_local_backend_data
